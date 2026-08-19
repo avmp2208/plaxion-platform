@@ -1,0 +1,153 @@
+# Production-oriented example with external Postgres, Ingress + TLS secret,
+# HPA, resource requests/limits, and an existing connection-string Secret.
+# Placeholders only — do not commit real credentials.
+
+image:
+  registry: ghcr.io
+  repository: plaxion/plaxion-platform
+  tag: "0.1.0"
+  pullPolicy: IfNotPresent
+
+imagePullSecrets:
+  - name: ghcr-pull-secret
+
+aspnetcore:
+  environment: Production
+
+platform:
+  apiBaseUrl: "" # same-origin via Ingress
+  publicBaseUrl: "https://platform.example.com"
+  environment: Production
+
+config:
+  cors:
+    allowedOrigins:
+      - "https://platform.example.com"
+  observability:
+    otlpEndpoint: ""
+  database:
+    autoMigrate: false
+    failOnPendingMigrations: true
+
+database:
+  provider: PostgreSql
+  mode: external
+  external:
+    # Prefer a full connection string managed outside the chart:
+    existingConnectionStringSecret:
+      name: plaxion-db-connection
+      key: connection-string
+    # host/database/username unused when existingConnectionStringSecret is set
+    host: ""
+    database: ""
+    username: ""
+
+postgresql:
+  enabled: false
+
+secrets:
+  observability:
+    otlpHeaders: ""
+    existingSecret:
+      name: ""
+      key: otlp-headers
+
+api:
+  enabled: true
+  replicaCount: 2
+  service:
+    type: ClusterIP
+    port: 8080
+  ingress:
+    enabled: true
+    className: nginx
+    annotations:
+      nginx.ingress.kubernetes.io/ssl-redirect: "true"
+      nginx.ingress.kubernetes.io/proxy-body-size: "8m"
+    hosts:
+      - host: platform.example.com
+        paths:
+          - path: /
+            pathType: Prefix
+    tls:
+      - secretName: platform-tls
+        hosts:
+          - platform.example.com
+  ingressRoute:
+    enabled: false
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 8
+    targetCPUUtilizationPercentage: 70
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: "2"
+      memory: 1Gi
+  podAnnotations:
+    prometheus.io/scrape: "false"
+
+ingestion:
+  enabled: true
+  replicaCount: 2
+  # Keep internal by default in this example; expose via mesh / private LB as needed.
+  service:
+    type: ClusterIP
+    port: 8080
+  ingress:
+    enabled: false
+  ingressRoute:
+    enabled: false
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 20
+    targetCPUUtilizationPercentage: 65
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: "2"
+      memory: 1Gi
+
+migrations:
+  enabled: true
+  backoffLimit: 5
+  ttlSecondsAfterFinished: 600
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: "1"
+      memory: 512Mi
+
+networkPolicy:
+  enabled: true
+  allowExternal: true
+  restrictiveEgress: false
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: false
+  runAsNonRoot: true
+  runAsUser: 1000
+  capabilities:
+    drop:
+      - ALL
+
+serviceAccount:
+  create: true
+  automount: true

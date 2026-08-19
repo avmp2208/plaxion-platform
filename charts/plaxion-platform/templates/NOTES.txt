@@ -1,0 +1,119 @@
+================================================================================
+ Plaxion Platform {{ .Chart.Version }} (app {{ .Chart.AppVersion }})
+================================================================================
+
+This release deploys:
+  - Platform API (+ embedded Angular dashboard SPA)  [ROLE=api]
+  - Platform Ingestion (OTLP/HTTP on port 8080)      [ROLE=ingestion]
+  - EF Core migration Job as a Helm pre-install/pre-upgrade hook
+
+{{- if eq .Values.database.mode "bundled" }}
+  - Bundled Bitnami PostgreSQL (postgresql.enabled=true)
+{{- else }}
+  - External PostgreSQL at {{ .Values.database.external.host | default "(existingConnectionStringSecret)" }}
+{{- end }}
+
+--------------------------------------------------------------------------------
+ Accessing the API / Dashboard
+--------------------------------------------------------------------------------
+{{- if .Values.api.enabled }}
+Service: {{ include "plaxion-platform.fullname" . }}-api ({{ .Values.api.service.type }})
+{{- if .Values.api.ingress.enabled }}
+Ingress host(s):
+{{- range .Values.api.ingress.hosts }}
+  - http{{ if $.Values.api.ingress.tls }}s{{ end }}://{{ .host }}
+{{- end }}
+{{- else if .Values.api.ingressRoute.enabled }}
+Traefik IngressRoute enabled. Match rules:
+{{- range .Values.api.ingressRoute.routes }}
+  - {{ .match }}
+{{- end }}
+{{- else if contains "NodePort" .Values.api.service.type }}
+
+  export NODE_PORT=$(kubectl get --namespace {{ .Release.Namespace }} -o jsonpath="{.spec.ports[0].nodePort}" services {{ include "plaxion-platform.fullname" . }}-api)
+  export NODE_IP=$(kubectl get nodes --namespace {{ .Release.Namespace }} -o jsonpath="{.items[0].status.addresses[0].address}")
+  echo http://$NODE_IP:$NODE_PORT
+{{- else if contains "LoadBalancer" .Values.api.service.type }}
+
+  NOTE: LoadBalancer provisioning may take a few minutes.
+  export SERVICE_IP=$(kubectl get svc --namespace {{ .Release.Namespace }} {{ include "plaxion-platform.fullname" . }}-api --template "{{"{{ range (index .status.loadBalancer.ingress 0) }}{{.}}{{ end }}"}}")
+  echo http://$SERVICE_IP:{{ .Values.api.service.port }}
+{{- else }}
+
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "plaxion-platform.fullname" . }}-api 8080:{{ .Values.api.service.port }}
+  # Dashboard + API: http://127.0.0.1:8080
+{{- end }}
+{{- end }}
+
+--------------------------------------------------------------------------------
+ Ingestion (OTLP/HTTP)
+--------------------------------------------------------------------------------
+{{- if .Values.ingestion.enabled }}
+Service: {{ include "plaxion-platform.fullname" . }}-ingestion ({{ .Values.ingestion.service.type }})
+Default exposure is internal ClusterIP. OTLP endpoints share port {{ .Values.ingestion.service.port }}:
+  POST /v1/traces   POST /v1/metrics   (no separate gRPC port)
+
+{{- if .Values.ingestion.ingress.enabled }}
+Ingress host(s):
+{{- range .Values.ingestion.ingress.hosts }}
+  - http{{ if $.Values.ingestion.ingress.tls }}s{{ end }}://{{ .host }}
+{{- end }}
+{{- else if .Values.ingestion.ingressRoute.enabled }}
+Traefik IngressRoute enabled for ingestion.
+{{- else }}
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "plaxion-platform.fullname" . }}-ingestion 8081:{{ .Values.ingestion.service.port }}
+{{- end }}
+{{- end }}
+
+--------------------------------------------------------------------------------
+ Migrations
+--------------------------------------------------------------------------------
+{{- if .Values.migrations.enabled }}
+A Helm hook Job runs before install/upgrade:
+  name: {{ include "plaxion-platform.fullname" . }}-migrate
+  image: same platform image
+  env:  ROLE=api
+  args: ["--migrate"]
+
+Check status:
+  kubectl -n {{ .Release.Namespace }} get jobs -l app.kubernetes.io/component=migration
+  kubectl -n {{ .Release.Namespace }} logs job/{{ include "plaxion-platform.fullname" . }}-migrate
+
+Hooks with delete-policy "hook-succeeded" are removed after success; failed hooks
+are retained until the next upgrade (before-hook-creation) for debugging.
+{{- else }}
+WARNING: migrations.enabled=false — ensure schema is applied out-of-band before pods start.
+{{- end }}
+
+--------------------------------------------------------------------------------
+ Health probes
+--------------------------------------------------------------------------------
+  Liveness:  GET /health  or /healthz   (no dependency checks)
+  Readiness: GET /health/ready          (includes DB connectivity)
+
+--------------------------------------------------------------------------------
+ IMPORTANT: Rollback caveat
+--------------------------------------------------------------------------------
+  helm rollback does NOT reverse database migrations applied by the migration Job.
+  Schema changes are forward-only. Plan application rollbacks and DB migrations
+  independently. Restoring a previous app version against a newer schema may fail
+  if the older binary is incompatible.
+
+--------------------------------------------------------------------------------
+ Uninstall notes
+--------------------------------------------------------------------------------
+  helm uninstall {{ .Release.Name }} -n {{ .Release.Namespace }}
+
+{{- if eq .Values.database.mode "bundled" }}
+  Bundled PostgreSQL PVCs are typically RETAINED after uninstall (Bitnami default).
+  Delete them manually if you intend to wipe data:
+    kubectl -n {{ .Release.Namespace }} get pvc
+    kubectl -n {{ .Release.Namespace }} delete pvc -l app.kubernetes.io/instance={{ .Release.Name }}
+{{- end }}
+
+  Chart-managed Secrets are deleted with the release. Prefer existingSecret /
+  existingConnectionStringSecret for credentials you manage out-of-band.
+
+Dashboard note: the SPA is served by the API container (wwwroot). There is no
+separate dashboard Deployment. Leave platform.apiBaseUrl empty for same-origin.
+================================================================================

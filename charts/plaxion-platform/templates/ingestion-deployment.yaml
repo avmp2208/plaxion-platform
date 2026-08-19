@@ -1,0 +1,107 @@
+{{- if .Values.ingestion.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "plaxion-platform.fullname" . }}-ingestion
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "plaxion-platform.labels" . | nindent 4 }}
+    app.kubernetes.io/component: ingestion
+  {{- with .Values.commonAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- if not .Values.ingestion.autoscaling.enabled }}
+  replicas: {{ .Values.ingestion.replicaCount }}
+  {{- end }}
+  revisionHistoryLimit: {{ .Values.ingestion.revisionHistoryLimit | default 3 }}
+  selector:
+    matchLabels:
+      {{- include "plaxion-platform.ingestion.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "plaxion-platform.ingestion.selectorLabels" . | nindent 8 }}
+        {{- with .Values.ingestion.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      annotations:
+        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+        {{- with .Values.ingestion.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ include "plaxion-platform.serviceAccountName" . }}
+      {{- include "plaxion-platform.imagePullSecrets" . | nindent 6 }}
+      {{- with .Values.priorityClassName }}
+      priorityClassName: {{ . }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- include "plaxion-platform.nodeSelector" (dict "root" . "component" .Values.ingestion) | nindent 6 }}
+      {{- include "plaxion-platform.tolerations" (dict "root" . "component" .Values.ingestion) | nindent 6 }}
+      {{- include "plaxion-platform.affinity" (dict "root" . "component" .Values.ingestion) | nindent 6 }}
+      {{- include "plaxion-platform.topologySpreadConstraints" (dict "root" . "component" .Values.ingestion) | nindent 6 }}
+      containers:
+        - name: ingestion
+          image: {{ include "plaxion-platform.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- with .Values.ingestion.command }}
+          command:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.ingestion.args }}
+          args:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          ports:
+            # OTLP over HTTP only — Platform does not expose a separate OTLP gRPC port.
+            - name: http
+              containerPort: {{ .Values.ingestion.service.targetPort | default 8080 }}
+              protocol: TCP
+          env:
+            {{- include "plaxion-platform.ingestionEnv" . | nindent 12 }}
+            {{- include "plaxion-platform.commonEnv" . | nindent 12 }}
+            {{- with .Values.extraEnv }}
+            {{- include "plaxion-platform.extraEnv" . | nindent 12 }}
+            {{- end }}
+            {{- with .Values.ingestion.extraEnv }}
+            {{- include "plaxion-platform.extraEnv" . | nindent 12 }}
+            {{- end }}
+          {{- if or .Values.extraEnvFrom .Values.ingestion.extraEnvFrom }}
+          envFrom:
+            {{- with .Values.extraEnvFrom }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+            {{- with .Values.ingestion.extraEnvFrom }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- end }}
+          {{- if .Values.ingestion.livenessProbe.enabled }}
+          livenessProbe:
+            httpGet:
+              path: {{ .Values.ingestion.livenessProbe.path | default "/health" }}
+              port: http
+            initialDelaySeconds: {{ .Values.ingestion.livenessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.ingestion.livenessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.ingestion.livenessProbe.timeoutSeconds }}
+            failureThreshold: {{ .Values.ingestion.livenessProbe.failureThreshold }}
+            successThreshold: {{ .Values.ingestion.livenessProbe.successThreshold }}
+          {{- end }}
+          {{- if .Values.ingestion.readinessProbe.enabled }}
+          readinessProbe:
+            httpGet:
+              path: {{ .Values.ingestion.readinessProbe.path | default "/health/ready" }}
+              port: http
+            initialDelaySeconds: {{ .Values.ingestion.readinessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.ingestion.readinessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.ingestion.readinessProbe.timeoutSeconds }}
+            failureThreshold: {{ .Values.ingestion.readinessProbe.failureThreshold }}
+            successThreshold: {{ .Values.ingestion.readinessProbe.successThreshold }}
+          {{- end }}
+          resources:
+            {{- toYaml .Values.ingestion.resources | nindent 12 }}
+{{- end }}

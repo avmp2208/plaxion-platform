@@ -1,0 +1,30 @@
+{{- if .Values.ingestion.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "plaxion-platform.fullname" . }}-ingestion
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "plaxion-platform.labels" . | nindent 4 }}
+    app.kubernetes.io/component: ingestion
+    {{- with .Values.ingestion.service.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- with .Values.ingestion.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.ingestion.service.type }}
+  ports:
+    # Single HTTP port — OTLP/HTTP paths (/v1/traces, /v1/metrics, ...) share 8080. No gRPC port.
+    - port: {{ .Values.ingestion.service.port }}
+      targetPort: http
+      protocol: TCP
+      name: http
+      {{- if and (or (eq .Values.ingestion.service.type "NodePort") (eq .Values.ingestion.service.type "LoadBalancer")) .Values.ingestion.service.nodePort }}
+      nodePort: {{ .Values.ingestion.service.nodePort }}
+      {{- end }}
+  selector:
+    {{- include "plaxion-platform.ingestion.selectorLabels" . | nindent 4 }}
+{{- end }}

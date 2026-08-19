@@ -1,0 +1,75 @@
+# Traefik IngressRoute example (CRD: traefik.io/v1alpha1).
+# Uses external Postgres with chart-managed password secret (placeholder).
+
+image:
+  registry: ghcr.io
+  repository: plaxion/plaxion-platform
+  tag: "0.1.0"
+
+aspnetcore:
+  environment: Production
+
+platform:
+  apiBaseUrl: ""
+
+database:
+  provider: PostgreSql
+  mode: external
+  external:
+    host: postgres.databases.svc.cluster.local
+    port: 5432
+    database: plaxion
+    username: plaxion
+    password: "CHANGE_ME_TRAFIK_EXAMPLE"
+
+postgresql:
+  enabled: false
+
+api:
+  enabled: true
+  replicaCount: 2
+  service:
+    type: ClusterIP
+  # Prefer IngressRoute over networking.k8s.io Ingress when using Traefik CRDs.
+  ingress:
+    enabled: false
+  ingressRoute:
+    enabled: true
+    entryPoints:
+      - websecure
+    routes:
+      - match: Host(`platform.example.com`)
+        kind: Rule
+        middlewares: []
+    tls:
+      secretName: platform-tls
+      # certResolver: letsencrypt
+
+ingestion:
+  enabled: true
+  replicaCount: 2
+  service:
+    type: ClusterIP
+  ingress:
+    enabled: false
+  # Optional: expose OTLP/HTTP via Traefik (still HTTP-only on 8080, no gRPC port)
+  ingressRoute:
+    enabled: true
+    entryPoints:
+      - websecure
+    routes:
+      - match: Host(`otlp.example.com`)
+        kind: Rule
+    tls:
+      secretName: otlp-tls
+
+config:
+  cors:
+    allowedOrigins:
+      - "https://platform.example.com"
+
+migrations:
+  enabled: true
+
+ingressRoute:
+  annotations: {}

@@ -1,0 +1,49 @@
+{{- if and .Values.ingestion.enabled .Values.ingestion.ingressRoute.enabled }}
+{{- /*
+  Traefik IngressRoute CRD for ingestion (OTLP/HTTP).
+  NOTE: Prefer enabling either ingestion.ingress OR ingestion.ingressRoute for the same host, not both.
+  External exposure is opt-in; default service type is ClusterIP.
+*/}}
+{{- $fullName := printf "%s-ingestion" (include "plaxion-platform.fullname" .) }}
+{{- $svcPort := .Values.ingestion.service.port }}
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: {{ $fullName }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "plaxion-platform.labels" . | nindent 4 }}
+    app.kubernetes.io/component: ingestion
+  annotations:
+    {{- with .Values.ingressRoute.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  entryPoints:
+    {{- toYaml .Values.ingestion.ingressRoute.entryPoints | nindent 4 }}
+  routes:
+    {{- range .Values.ingestion.ingressRoute.routes }}
+    - match: {{ .match | quote }}
+      kind: {{ .kind | default "Rule" }}
+      {{- with .middlewares }}
+      middlewares:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      services:
+        {{- if .services }}
+        {{- toYaml .services | nindent 8 }}
+        {{- else }}
+        - name: {{ $fullName }}
+          port: {{ $svcPort }}
+        {{- end }}
+    {{- end }}
+  {{- if or .Values.ingestion.ingressRoute.tls.secretName .Values.ingestion.ingressRoute.tls.certResolver }}
+  tls:
+    {{- with .Values.ingestion.ingressRoute.tls.secretName }}
+    secretName: {{ . }}
+    {{- end }}
+    {{- with .Values.ingestion.ingressRoute.tls.certResolver }}
+    certResolver: {{ . }}
+    {{- end }}
+  {{- end }}
+{{- end }}

@@ -1,0 +1,56 @@
+# Minimal external-Postgres install for local / CI template checks.
+# No real credentials — replace placeholders before applying to a cluster.
+#
+#   helm upgrade --install plaxion charts/plaxion-platform -f examples/values-simple.yaml
+
+image:
+  registry: ghcr.io
+  repository: plaxion/plaxion-platform
+  tag: "0.1.0"
+  pullPolicy: IfNotPresent
+
+aspnetcore:
+  environment: Production
+
+platform:
+  apiBaseUrl: ""
+
+database:
+  provider: PostgreSql
+  mode: external
+  external:
+    host: postgres.default.svc.cluster.local
+    port: 5432
+    database: plaxion
+    username: plaxion
+    password: "CHANGE_ME_NOT_A_REAL_PASSWORD"
+
+postgresql:
+  enabled: false
+
+api:
+  enabled: true
+  replicaCount: 1
+  service:
+    type: ClusterIP
+  ingress:
+    enabled: false
+  ingressRoute:
+    enabled: false
+
+ingestion:
+  enabled: true
+  replicaCount: 1
+  service:
+    type: ClusterIP
+  ingress:
+    enabled: false
+  ingressRoute:
+    enabled: false
+
+migrations:
+  enabled: true
+
+config:
+  cors:
+    allowedOrigins: []

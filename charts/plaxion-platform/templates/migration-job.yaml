@@ -1,0 +1,85 @@
+{{- if and .Values.migrations.enabled }}
+{{- /*
+  Migration Job as a Helm hook (pre-install, pre-upgrade).
+
+  WHY a hook (not a plain Job or Database__AutoMigrate):
+  - Platform runs EF migrations via the same image with ROLE=api and args ["--migrate"].
+  - Schema must exist before api/ingestion pods become Ready (FailOnPendingMigrations=true by default).
+  - Helm pre-install/pre-upgrade hooks block release progress until the Job succeeds, giving
+    ordering guarantees similar to docker-compose depends_on: service_completed_successfully.
+  - Database__AutoMigrate is intentionally left false; the chart owns migration lifecycle.
+  - hook-delete-policy before-hook-creation,hook-succeeded avoids stuck hooks on re-upgrade
+    while retaining failed Jobs for debugging until the next attempt replaces them.
+*/}}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "plaxion-platform.fullname" . }}-migrate
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "plaxion-platform.labels" . | nindent 4 }}
+    app.kubernetes.io/component: migration
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: {{ .Values.migrations.hook.weight | default "-5" | quote }}
+    helm.sh/hook-delete-policy: {{ .Values.migrations.hook.deletePolicy | default "before-hook-creation,hook-succeeded" }}
+    {{- with .Values.commonAnnotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+    {{- with .Values.migrations.podAnnotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  backoffLimit: {{ .Values.migrations.backoffLimit | default 3 }}
+  ttlSecondsAfterFinished: {{ .Values.migrations.ttlSecondsAfterFinished | default 300 }}
+  {{- if .Values.migrations.activeDeadlineSeconds }}
+  activeDeadlineSeconds: {{ .Values.migrations.activeDeadlineSeconds }}
+  {{- end }}
+  template:
+    metadata:
+      labels:
+        {{- include "plaxion-platform.migration.selectorLabels" . | nindent 8 }}
+      {{- with .Values.migrations.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      restartPolicy: Never
+      serviceAccountName: {{ include "plaxion-platform.serviceAccountName" . }}
+      {{- include "plaxion-platform.imagePullSecrets" . | nindent 6 }}
+      {{- with .Values.priorityClassName }}
+      priorityClassName: {{ . }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- include "plaxion-platform.nodeSelector" (dict "root" . "component" .Values.migrations) | nindent 6 }}
+      {{- include "plaxion-platform.tolerations" (dict "root" . "component" .Values.migrations) | nindent 6 }}
+      {{- include "plaxion-platform.affinity" (dict "root" . "component" .Values.migrations) | nindent 6 }}
+      containers:
+        - name: migrate
+          image: {{ include "plaxion-platform.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args: ["--migrate"]
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          env:
+            {{- include "plaxion-platform.apiEnv" . | nindent 12 }}
+            {{- include "plaxion-platform.commonEnv" . | nindent 12 }}
+            {{- /* Migration should not fail closed on pending — it applies them */}}
+            - name: Database__FailOnPendingMigrations
+              value: "false"
+            - name: Database__AutoMigrate
+              value: "false"
+            {{- with .Values.extraEnv }}
+            {{- include "plaxion-platform.extraEnv" . | nindent 12 }}
+            {{- end }}
+            {{- with .Values.migrations.extraEnv }}
+            {{- include "plaxion-platform.extraEnv" . | nindent 12 }}
+            {{- end }}
+          {{- with .Values.extraEnvFrom }}
+          envFrom:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          resources:
+            {{- toYaml .Values.migrations.resources | nindent 12 }}
+{{- end }}

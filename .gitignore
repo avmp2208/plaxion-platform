@@ -1,0 +1,14 @@
+# Helm packaged dependency charts (run: helm dependency update)
+charts/*/charts/*.tgz
+charts/*/tmpcharts/
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.idea/
+*.user
+*.suo
+
+# Local scratch
+.output.txt
+*.log

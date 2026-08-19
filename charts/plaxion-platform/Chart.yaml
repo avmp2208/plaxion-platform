@@ -1,0 +1,21 @@
+apiVersion: v2
+name: plaxion-platform
+description: Official Helm chart for PlaxionMediator.Platform (API, Ingestion, Dashboard SPA, migrations)
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+home: https://github.com/plaxion/plaxion-platform
+keywords:
+  - plaxion
+  - observability
+  - otlp
+  - platform
+maintainers:
+  - name: Plaxion
+sources:
+  - https://github.com/plaxion/plaxion-platform
+dependencies:
+  - name: postgresql
+    version: "~15.5.0"
+    repository: "https://charts.bitnami.com/bitnami"
+    condition: postgresql.enabled

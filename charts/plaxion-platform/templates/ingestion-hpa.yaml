@@ -1,0 +1,34 @@
+{{- if and .Values.ingestion.enabled .Values.ingestion.autoscaling.enabled }}
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ include "plaxion-platform.fullname" . }}-ingestion
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "plaxion-platform.labels" . | nindent 4 }}
+    app.kubernetes.io/component: ingestion
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ include "plaxion-platform.fullname" . }}-ingestion
+  minReplicas: {{ .Values.ingestion.autoscaling.minReplicas }}
+  maxReplicas: {{ .Values.ingestion.autoscaling.maxReplicas }}
+  metrics:
+    {{- if .Values.ingestion.autoscaling.targetCPUUtilizationPercentage }}
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.ingestion.autoscaling.targetCPUUtilizationPercentage }}
+    {{- end }}
+    {{- if .Values.ingestion.autoscaling.targetMemoryUtilizationPercentage }}
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.ingestion.autoscaling.targetMemoryUtilizationPercentage }}
+    {{- end }}
+{{- end }}

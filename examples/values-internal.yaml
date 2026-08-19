@@ -1,0 +1,83 @@
+# Fully internal deployment: ClusterIP only, no Ingress/IngressRoute.
+# Suitable for private clusters / service-mesh front ends.
+# Uses existingConnectionStringSecret so the chart does not store DB passwords in values.
+
+image:
+  registry: ghcr.io
+  repository: plaxion/plaxion-platform
+  tag: "0.1.0"
+  pullPolicy: IfNotPresent
+
+aspnetcore:
+  environment: Production
+
+platform:
+  apiBaseUrl: ""
+  publicBaseUrl: ""
+
+database:
+  provider: PostgreSql
+  mode: external
+  external:
+    existingConnectionStringSecret:
+      name: plaxion-platform-db
+      key: connection-string
+
+postgresql:
+  enabled: false
+
+api:
+  enabled: true
+  replicaCount: 1
+  service:
+    type: ClusterIP
+    port: 8080
+  ingress:
+    enabled: false
+  ingressRoute:
+    enabled: false
+  autoscaling:
+    enabled: false
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: "1"
+      memory: 512Mi
+
+ingestion:
+  enabled: true
+  replicaCount: 1
+  service:
+    type: ClusterIP
+    port: 8080
+  ingress:
+    enabled: false
+  ingressRoute:
+    enabled: false
+  autoscaling:
+    enabled: false
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: "1"
+      memory: 512Mi
+
+migrations:
+  enabled: true
+
+networkPolicy:
+  enabled: true
+  allowExternal: false
+  restrictiveEgress: false
+
+config:
+  cors:
+    # Same-origin / in-cluster callers; leave empty to block browser cross-origin in Production
+    allowedOrigins: []
+
+serviceAccount:
+  create: true

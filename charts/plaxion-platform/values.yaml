@@ -1,0 +1,397 @@
+# Default values for plaxion-platform.
+# This is a YAML-formatted file.
+
+global:
+  # Optional image registry prefix applied when image.registry is empty
+  imageRegistry: ""
+  # Optional global pull secrets merged with top-level imagePullSecrets
+  imagePullSecrets: []
+  # Default StorageClass for bundled dependencies (empty = cluster default)
+  storageClass: ""
+
+## Container image for Platform.Api + Platform.Ingestion + dashboard SPA
+image:
+  registry: ghcr.io
+  repository: plaxion/plaxion-platform
+  tag: "" # defaults to .Chart.AppVersion when empty
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+## Shared ASP.NET Core environment applied to api, ingestion, and migration job
+aspnetcore:
+  environment: Production # Development | Testing | Staging | Production
+  urls: "http://+:8080"
+
+## Optional platform-level settings
+platform:
+  # Browser-facing API base URL rendered into dashboard assets/config.json.
+  # Leave empty for same-origin (recommended when dashboard is served by the API).
+  apiBaseUrl: ""
+  publicBaseUrl: ""
+  environment: "" # optional Platform__Environment override; defaults to aspnetcore.environment
+
+## Non-sensitive application configuration (rendered as env vars)
+config:
+  allowedHosts: "*"
+  storage:
+    provider: PostgreSql
+  aggregation:
+    interval: "00:01:00"
+    bucketSize: "00:01:00"
+  retention:
+    rawSampleRetention: "7.00:00:00"
+    checkInterval: "00:05:00"
+  ingestion:
+    maxRequestSizeBytes: 1048576
+    maxSamplesPerRequest: 5000
+    maxMetricNamesPerRequest: 200
+  database:
+    # Chart manages schema via the migration Job/hook. Keep AutoMigrate false.
+    autoMigrate: false
+    failOnPendingMigrations: true
+  observability:
+    otlpEndpoint: ""
+    # Prefer secrets.observability.otlpHeaders / existingSecret for sensitive headers
+    otlpHeaders: ""
+  # CORS allowed origins for the API (required in Production for cross-origin browser access).
+  # Empty list blocks all cross-origin requests in Production.
+  cors:
+    allowedOrigins: []
+
+## API role (Platform.Api.dll) — also serves the Angular dashboard from wwwroot
+api:
+  enabled: true
+  replicaCount: 1
+  revisionHistoryLimit: 3
+  args: []
+  ## Additional container command (rarely needed; entrypoint already selects ROLE)
+  command: []
+
+  service:
+    type: ClusterIP
+    port: 8080
+    targetPort: 8080
+    annotations: {}
+    labels: {}
+    # Optional fixed NodePort when type=NodePort
+    nodePort:
+
+  ## Generic Kubernetes Ingress (networking.k8s.io/v1)
+  ## Prefer enabling either ingress OR ingressRoute for a given host, not both.
+  ingress:
+    enabled: false
+    className: ""
+    annotations: {}
+    #  kubernetes-nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    hosts:
+      - host: platform.example.com
+        paths:
+          - path: /
+            pathType: Prefix
+    tls: []
+    #  - secretName: platform-tls
+    #    hosts:
+    #      - platform.example.com
+
+  ## Traefik IngressRoute CRD (traefik.io/v1alpha1)
+  ingressRoute:
+    enabled: false
+    entryPoints:
+      - websecure
+    routes:
+      - match: Host(`platform.example.com`)
+        kind: Rule
+        services: [] # defaults to this chart's api service when empty
+        middlewares: []
+    tls:
+      secretName: ""
+      # certResolver: letsencrypt
+
+  autoscaling:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 5
+    targetCPUUtilizationPercentage: 80
+    targetMemoryUtilizationPercentage:
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: "1"
+      memory: 512Mi
+
+  podAnnotations: {}
+  podLabels: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  topologySpreadConstraints: []
+
+  ## Extra env vars (name/value or valueFrom)
+  extraEnv: []
+  ## Extra envFrom (configMapRef / secretRef)
+  extraEnvFrom: []
+
+  ## Probe overrides (paths match Platform health endpoints)
+  livenessProbe:
+    enabled: true
+    path: /health
+    initialDelaySeconds: 15
+    periodSeconds: 20
+    timeoutSeconds: 5
+    failureThreshold: 3
+    successThreshold: 1
+  readinessProbe:
+    enabled: true
+    path: /health/ready
+    initialDelaySeconds: 10
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 6
+    successThreshold: 1
+
+## Ingestion role (Platform.Ingestion.dll) — OTLP/HTTP on port 8080 only (no gRPC port)
+ingestion:
+  enabled: true
+  replicaCount: 1
+  revisionHistoryLimit: 3
+  args: []
+  command: []
+
+  ## Default: internal-only ClusterIP. Opt in to external exposure via LoadBalancer/ingress.
+  service:
+    type: ClusterIP
+    port: 8080
+    targetPort: 8080
+    annotations: {}
+    labels: {}
+    nodePort:
+
+  ingress:
+    enabled: false
+    className: ""
+    annotations: {}
+    hosts:
+      - host: otlp.example.com
+        paths:
+          - path: /
+            pathType: Prefix
+    tls: []
+
+  ingressRoute:
+    enabled: false
+    entryPoints:
+      - websecure
+    routes:
+      - match: Host(`otlp.example.com`)
+        kind: Rule
+        services: []
+        middlewares: []
+    tls:
+      secretName: ""
+
+  autoscaling:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage:
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: "1"
+      memory: 512Mi
+
+  podAnnotations: {}
+  podLabels: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  topologySpreadConstraints: []
+  extraEnv: []
+  extraEnvFrom: []
+
+  livenessProbe:
+    enabled: true
+    path: /health
+    initialDelaySeconds: 15
+    periodSeconds: 20
+    timeoutSeconds: 5
+    failureThreshold: 3
+    successThreshold: 1
+  readinessProbe:
+    enabled: true
+    path: /health/ready
+    initialDelaySeconds: 10
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 6
+    successThreshold: 1
+
+## Dashboard is served by the API container (wwwroot + SPA fallback).
+## No separate Deployment is created. Configure API exposure / API_BASE_URL instead.
+dashboard:
+  # Documentation-only key. The SPA is bundled in the platform image and served by api.
+  servedBy: api
+
+## Database configuration
+database:
+  provider: PostgreSql
+  ## external: use an existing PostgreSQL instance
+  ## bundled: deploy Bitnami PostgreSQL subchart (postgresql.enabled must be true)
+  mode: external
+
+  external:
+    # Placeholder host so values.schema.json validates defaults; override for real installs.
+    host: "postgres.example.svc.cluster.local"
+    port: 5432
+    database: plaxion
+    username: plaxion
+    ## Plain-text password for chart-managed Secret (DO NOT commit real credentials).
+    ## Ignored when existingSecret or existingConnectionStringSecret is set.
+    password: ""
+    ## Existing Secret containing only the DB password
+    existingSecret:
+      name: ""
+      passwordKey: password
+    ## Existing Secret containing the full Npgsql connection string
+    existingConnectionStringSecret:
+      name: ""
+      key: connection-string
+
+## Bitnami PostgreSQL subchart (optional). Enabled only when database.mode=bundled.
+## See https://github.com/bitnami/charts/tree/main/bitnami/postgresql
+postgresql:
+  enabled: false
+  auth:
+    username: plaxion
+    password: "" # set explicitly or rely on subchart-generated secret + our connection secret
+    database: plaxion
+    # existingSecret: ""  # optional Bitnami auth secret
+  primary:
+    persistence:
+      enabled: true
+      size: 8Gi
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+
+## EF Core migration Job (same image, ROLE=api, args: ["--migrate"])
+## Implemented as a Helm pre-install/pre-upgrade hook so schema is ready before pods start.
+migrations:
+  enabled: true
+  backoffLimit: 3
+  ttlSecondsAfterFinished: 300
+  activeDeadlineSeconds: 600
+  ## Helm hook annotations
+  hook:
+    ## pre-install,pre-upgrade ensures migrations run before new Deployments become active
+    weight: "-5"
+    deletePolicy: before-hook-creation,hook-succeeded
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  podAnnotations: {}
+  ## Extra env for the migration job only
+  extraEnv: []
+
+## Chart-managed secrets (used when not supplying existing* secrets)
+secrets:
+  ## Annotations applied to the chart-managed Secret
+  annotations: {}
+  ## Optional Observability__OtlpHeaders (sensitive). Leave empty to omit.
+  observability:
+    otlpHeaders: ""
+    existingSecret:
+      name: ""
+      key: otlp-headers
+
+## Top-level generic ingress defaults (optional shared annotations/class)
+## Per-service ingress blocks under api/ingestion take precedence for enablement/hosts.
+ingress:
+  className: ""
+  annotations: {}
+
+## Top-level Traefik defaults
+ingressRoute:
+  annotations: {}
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+  automount: true
+
+## Pod-level security context (fsGroup etc.)
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+  seccompProfile:
+    type: RuntimeDefault
+
+## Container-level security context
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: false # entrypoint writes wwwroot/assets/config.json
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  capabilities:
+    drop:
+      - ALL
+
+## Default resources (used only if a component omits its own)
+resources: {}
+
+## Default autoscaling (reference only; configure per component)
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 80
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+topologySpreadConstraints: []
+
+## Global extra env applied to api, ingestion, and migration
+extraEnv: []
+extraEnvFrom: []
+
+## Optional NetworkPolicy (disabled by default)
+networkPolicy:
+  enabled: false
+  ## Allow ingress from any namespace/pod to api & ingestion ports when empty
+  allowExternal: true
+  extraIngress: []
+  extraEgress: []
+  ## When false, egress is unrestricted (besides default allow DNS/DB rules when restrictive)
+  restrictiveEgress: false
+
+## Priority class for pods (optional)
+priorityClassName: ""
+
+## Common labels added to all resources
+commonLabels: {}
+
+## Common annotations added to all resources
+commonAnnotations: {}
