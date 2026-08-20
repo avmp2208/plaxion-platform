@@ -96,6 +96,12 @@
                   "then": { "required": ["requiredClaimType"], "properties": { "requiredClaimType": { "type": "string", "minLength": 1 } } }
                 }
               ]
+            },
+            "invitations": {
+              "type": "object",
+              "properties": {
+                "emailClaimTypes": { "type": "array", "items": { "type": "string" } }
+              }
             }
           }
         }

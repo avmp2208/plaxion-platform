@@ -25,6 +25,7 @@ is unaffected and continues to use `X-Api-Key`.
 - [docs/oidc-keycloak.md](docs/oidc-keycloak.md) — Keycloak walkthrough
 - [docs/oidc-identityserver.md](docs/oidc-identityserver.md) — IdentityServer/Duende walkthrough
 - [docs/upgrade-to-oidc.md](docs/upgrade-to-oidc.md) — upgrading an existing pre-OIDC release without losing tenant access
+- [docs/tenant-invitations-and-roles.md](docs/tenant-invitations-and-roles.md) — platform-level tenant-creation authorization vs tenant-level Owner/Member roles, and the multi-tenant email invitation flow
 
 ## Chart
 
@@ -48,13 +49,20 @@ See [docs/installation.md](docs/installation.md#before-you-begin) for details an
 
 ## Chart compatibility
 
-Chart version `0.2.0` · App version `0.2.0` · Kubernetes 1.25+ · Helm 3.10+.
+Chart version `0.3.0` · App version `0.3.0` · Kubernetes 1.25+ · Helm 3.10+.
 
 > Chart `0.2.0` adds generic OIDC authentication (`authentication.*` values).
 > Existing pre-`0.2.0` releases keep working after upgrade only if you follow
 > [docs/upgrade-to-oidc.md](docs/upgrade-to-oidc.md) — Production installations
 > now require either `authentication.enabled: true` (recommended) or the
 > explicit, intentionally unsafe `authentication.allowAnonymousProduction: true`.
+>
+> Chart `0.3.0` documents Platform's multi-tenant email invitation model
+> (`Owner`/`Member` tenant roles, `POST /v1/invitations`, JIT-claim on
+> `GET /v1/tenants`) and adds the optional
+> `authentication.authorization.invitations.emailClaimTypes` value — see
+> [docs/tenant-invitations-and-roles.md](docs/tenant-invitations-and-roles.md).
+> No breaking changes to existing `authentication.*` values.
 
 ## Quick start
 

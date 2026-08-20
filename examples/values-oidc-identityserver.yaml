@@ -35,9 +35,14 @@ authentication:
       postLogoutRedirectPath: /
   authorization:
     tenantCreation:
-      # Example: require a generic claim instead of a role.
-      mode: Claim
-      requiredClaimType: "plaxion:tenant-creator"
-      requiredClaimValues: []
+      # Production recommendation: restrict tenant creation to a dedicated
+      # IdP role rather than any authenticated user.
+      mode: Role
+      requiredRole: "platform-tenant-admin"
+      # Alternative: require a generic claim instead of a role, e.g.
+      #   mode: Claim
+      #   requiredClaimType: "plaxion:tenant-creator"
+      #   requiredClaimValues: []
+    # Legacy break-glass mechanism only, not normal onboarding.
     platformAdministrator:
       mode: Disabled

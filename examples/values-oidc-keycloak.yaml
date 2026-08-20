@@ -35,8 +35,10 @@ authentication:
       postLogoutRedirectPath: /
   authorization:
     tenantCreation:
-      # Example: require a Keycloak realm role instead of any authenticated user.
+      # Production recommendation: require a Keycloak realm role instead of
+      # any authenticated user.
       mode: Role
-      requiredRole: "plaxion-platform-admin"
+      requiredRole: "platform-tenant-admin"
+    # Legacy break-glass mechanism only, not normal onboarding.
     platformAdministrator:
       mode: Disabled

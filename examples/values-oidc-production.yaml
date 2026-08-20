@@ -43,9 +43,15 @@ authentication:
   authorization:
     tenantCreation:
       # AnyAuthenticatedUser | Role | Claim
-      mode: AnyAuthenticatedUser
-    # Disabled by default. Only enable temporarily while reconciling pre-OIDC
-    # legacy tenants (see docs/upgrade-to-oidc.md), then set back to Disabled.
+      # Production recommendation: restrict tenant creation to a dedicated
+      # IdP role rather than any authenticated user.
+      mode: Role
+      requiredRole: "platform-tenant-admin"
+    # Disabled by default. Legacy break-glass mechanism only, not normal
+    # onboarding — only enable temporarily while reconciling pre-OIDC legacy
+    # tenants (see docs/upgrade-to-oidc.md), then set back to Disabled.
+    # Normal onboarding after that is via Owner-issued invitations
+    # (POST /v1/invitations).
     platformAdministrator:
       mode: Disabled
 

@@ -85,10 +85,18 @@ authentication:
   authorization:
     ## Who may call POST /v1/tenants (self-service tenant creation) when
     ## authentication.enabled=true. Maps to Authorization:TenantCreation:*.
+    ## NOTE: this controls only who may CREATE tenants. Tenant-local roles
+    ## (TenantMembership.Owner / TenantMembership.Member) are Platform-internal
+    ## and are NOT OIDC roles — see docs/tenant-invitations-and-roles.md.
+    ## RECOMMENDED for production: mode=Role with a dedicated IdP role
+    ## (e.g. requiredRole=platform-tenant-admin) so tenant creation isn't
+    ## open to every authenticated user. AnyAuthenticatedUser/Claim remain
+    ## supported for smaller/self-service deployments — pick what fits.
     tenantCreation:
       # AnyAuthenticatedUser | Role | Claim
+      # Production recommendation: Role (see requiredRole below).
       mode: AnyAuthenticatedUser
-      # Required when mode=Role.
+      # Required when mode=Role. Production recommendation: platform-tenant-admin
       requiredRole: ""
       # Required when mode=Claim.
       requiredClaimType: ""
@@ -100,7 +108,9 @@ authentication:
     ## legacy tenants with zero membership rows) and call the explicit membership
     ## reconciliation endpoint (POST /v1/tenants/{tenantId}/memberships).
     ## Maps to Authorization:PlatformAdministrator:*.
-    ## CRITICAL for upgrading pre-OIDC installations — see docs/upgrade-to-oidc.md.
+    ## This is a legacy/pre-OIDC-migration break-glass mechanism only — normal
+    ## tenant onboarding uses Owner-issued invitations (POST /v1/invitations),
+    ## NOT PlatformAdministrator. See docs/upgrade-to-oidc.md.
     ## Keep Mode=Disabled until an upgrade run needs bootstrap access, then set
     ## Role/Claim against a tightly scoped IdP group and revoke afterwards.
     platformAdministrator:
@@ -109,6 +119,19 @@ authentication:
       requiredRole: ""
       requiredClaimType: ""
       requiredClaimValues: []
+
+    ## Multi-tenant email invitation JIT-claim settings. Maps to
+    ## Authorization:Invitations:*. Owners invite users via
+    ## POST /v1/invitations { email, tenantIds[] }; invitees are auto-claimed
+    ## into Member memberships on GET /v1/tenants based on a matching email
+    ## claim in their validated JWT. No emails are sent and no manual
+    ## acceptance step exists.
+    invitations:
+      # JWT claim types inspected (in order) for the invitee email. Leave
+      # empty to use Platform's built-in defaults (email, emails,
+      # preferred_username, and the legacy XML SOAP emailaddress claim).
+      # Maps to Authorization__Invitations__EmailClaimTypes__0, __1, ...
+      emailClaimTypes: []
 
 ## Non-sensitive application configuration (rendered as env vars)
 config:

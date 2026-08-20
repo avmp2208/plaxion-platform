@@ -49,8 +49,12 @@ authentication:
       clientId: "plaxion-platform-ui"
   authorization:
     tenantCreation:
-      mode: AnyAuthenticatedUser
-    # Temporary — revoke after reconciliation (step 5).
+      # Production recommendation: Role (see docs/oidc-authentication.md).
+      mode: Role
+      requiredRole: "platform-tenant-admin"
+    # Temporary — revoke after reconciliation (step 5). This is a break-glass
+    # mechanism only; it is never used for normal day-to-day membership
+    # management.
     platformAdministrator:
       mode: Role
       requiredRole: "plaxion-platform-bootstrap"
@@ -92,8 +96,14 @@ bootstrap operator.
 
 ### 5. Revoke bootstrap access
 
-Once every tenant has been reconciled, set `platformAdministrator` back to
-`Disabled` and upgrade again:
+Once every tenant has been reconciled (each legacy tenant now has an `Owner`
+membership), set `platformAdministrator` back to `Disabled` and upgrade
+again. From this point on, **all future onboarding uses Owner-issued
+invitations** (`POST /v1/invitations`) — see
+[`docs/tenant-invitations-and-roles.md`](tenant-invitations-and-roles.md) —
+not `PlatformAdministrator`. `PlatformAdministrator` should only ever be
+re-enabled again for a similar future break-glass/reconciliation need, never
+for routine membership management:
 
 ```yaml
 authentication:
@@ -127,3 +137,7 @@ helm upgrade plaxion-platform charts/plaxion-platform \
 - Do not skip step 2 and jump straight to `authentication.enabled: true` with
   `platformAdministrator.mode: Disabled` — you would have no way to grant
   legacy tenants ownership afterwards without direct database access.
+- Do not use `PlatformAdministrator` for ongoing/day-to-day tenant
+  membership management once reconciliation is complete — use Owner-issued
+  invitations (`POST /v1/invitations`) instead; see
+  [`docs/tenant-invitations-and-roles.md`](tenant-invitations-and-roles.md).

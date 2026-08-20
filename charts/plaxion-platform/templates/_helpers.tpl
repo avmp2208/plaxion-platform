@@ -427,6 +427,10 @@ Maps 1:1 to Platform's Authentication / Authorization:* / Dashboard:Oidc configu
 - name: {{ printf "Authorization__PlatformAdministrator__RequiredClaimValues__%d" $i | quote }}
   value: {{ $val | quote }}
 {{- end }}
+{{- range $i, $claimType := $auth.authorization.invitations.emailClaimTypes }}
+- name: {{ printf "Authorization__Invitations__EmailClaimTypes__%d" $i | quote }}
+  value: {{ $claimType | quote }}
+{{- end }}
 {{- end }}
 
 {{/*

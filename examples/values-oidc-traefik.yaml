@@ -32,7 +32,11 @@ authentication:
       postLogoutRedirectPath: /
   authorization:
     tenantCreation:
-      mode: AnyAuthenticatedUser
+      # Production recommendation: restrict tenant creation to a dedicated
+      # IdP role rather than any authenticated user.
+      mode: Role
+      requiredRole: "platform-tenant-admin"
+    # Legacy break-glass mechanism only, not normal onboarding.
     platformAdministrator:
       mode: Disabled
 

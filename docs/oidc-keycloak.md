@@ -35,16 +35,21 @@ with an **Audience** mapper (Client scopes → create scope → Mapper: Audience
 that sets `aud` to your chosen value (e.g. `plaxion-platform`), then assign
 that client scope to `plaxion-platform-ui`.
 
-## 3. (Optional) roles/claims for tenant-creation authorization
+## 3. Roles/claims for tenant-creation authorization
 
-Only needed if you want `authentication.authorization.tenantCreation.mode` to
-be `Role` or `Claim` instead of the default `AnyAuthenticatedUser`:
+Production recommendation is `authentication.authorization.tenantCreation.mode: Role`
+(rather than `AnyAuthenticatedUser`), so only intentionally-designated users
+can create tenants:
 
-- **Role mode**: create a realm role (e.g. `plaxion-platform-admin`), assign it
+- **Role mode**: create a realm role (e.g. `platform-tenant-admin`), assign it
   to the users who may create tenants, and ensure it is included in the token
   (`realm_access.roles` — Platform reads standard role claims).
 - **Claim mode**: add a protocol mapper that emits a custom claim
   (e.g. `plaxion:tenant-creator`) with whatever values you choose.
+
+This role/claim controls tenant **creation** only. It has nothing to do with
+the tenant-internal `Owner`/`Member` roles described below — those are
+Platform-owned and require no Keycloak role at all.
 
 ## 4. Configure the Helm values
 
@@ -67,7 +72,7 @@ authentication:
   authorization:
     tenantCreation:
       mode: Role
-      requiredRole: "plaxion-platform-admin"
+      requiredRole: "platform-tenant-admin"
 ```
 
 `authority` must exactly match the realm issuer Keycloak reports at
@@ -86,3 +91,31 @@ If login loops or fails, see the Troubleshooting table in
 [`docs/oidc-authentication.md`](oidc-authentication.md#troubleshooting) —
 common Keycloak-specific causes are a redirect URI mismatch or a missing
 audience mapper.
+
+## 6. Example: Alice creates a tenant, invites Bob
+
+Alice has the Keycloak realm role `platform-tenant-admin` (assigned in step 3).
+Bob is a normal authenticated user with **no special Keycloak role** —
+Member never requires one.
+
+1. Alice logs in and calls `POST /v1/tenants` — she is authorized by the
+   `Role` policy above, the tenant is created, and Alice automatically
+   becomes its `Owner`.
+2. Alice invites Bob into that tenant:
+
+   ```bash
+   curl -X POST https://platform.example.com/v1/invitations \
+     -H "Authorization: Bearer <alice's access token>" \
+     -H "Content-Type: application/json" \
+     -d '{
+       "email": "bob@example.com",
+       "tenantIds": ["<tenant-a-id>"]
+     }'
+   ```
+
+3. Bob authenticates via Keycloak as usual (no role/claim setup needed for
+   him). On his next `GET /v1/tenants`, Platform matches his token's email
+   claim against the pending invitation and automatically creates a `Member`
+   membership for him — see
+   [`docs/tenant-invitations-and-roles.md`](tenant-invitations-and-roles.md)
+   for the full flow.

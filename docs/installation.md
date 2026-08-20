@@ -335,7 +335,8 @@ authentication:
       postLogoutRedirectPath: /                            # SAFE DEFAULT — register with your OIDC provider
   authorization:
     tenantCreation:
-      mode: AnyAuthenticatedUser                          # OPTIONAL — or Role / Claim
+      mode: Role                                          # RECOMMENDED for production — or AnyAuthenticatedUser / Claim
+      requiredRole: "platform-tenant-admin"                # REQUIRED TO CHANGE when mode=Role — assign this IdP role to tenant creators
 
 config:
   cors:
@@ -532,13 +533,45 @@ Once the Dashboard loads:
 1. Open the Dashboard. If `authentication.enabled=true` you are redirected to
    your OIDC provider's login page — authenticate there first.
 2. Create a tenant (subject to your `authentication.authorization.tenantCreation`
-   policy).
+   policy — with the sample values above, the caller needs the
+   `platform-tenant-admin` IdP role). The creator automatically becomes that
+   tenant's `Owner`.
 3. Copy the one-time API key shown after tenant creation — it is not shown
    again. This key is what your instrumented applications will use to send
    telemetry (see next section).
 
 The chart does not create or manage tenants/API keys; they are created at
 runtime through the product itself.
+
+#### Example: Alice creates a tenant, invites Bob
+
+Say Alice's OIDC identity has been assigned the `platform-tenant-admin` role
+by your IdP (step 2 above). Bob is any other authenticated user — he needs
+**no** special IdP role to become a tenant member.
+
+1. Alice logs in and creates "Tenant A" — she is now its `Owner`.
+2. Alice invites Bob (there is no invitation UI yet; use the API directly):
+
+   ```bash
+   curl -X POST https://<PLATFORM_HOST>/v1/invitations \
+     -H "Authorization: Bearer <alice's access token>" \
+     -H "Content-Type: application/json" \
+     -d '{
+       "email": "bob@example.com",
+       "tenantIds": ["<tenant-a-id>"]
+     }'
+   ```
+
+   No email is sent — tell Bob about the invite yourself (email, chat, etc.).
+3. Bob authenticates normally through the OIDC login flow. On his next
+   `GET /v1/tenants` call, Platform automatically matches his token's email
+   claim against the pending invitation and grants him a `Member` membership
+   — no manual acceptance step. Bob can now see Tenant A's data, but cannot
+   create new tenants himself unless he separately holds the
+   `platform-tenant-admin` role.
+
+See [`docs/tenant-invitations-and-roles.md`](tenant-invitations-and-roles.md)
+for the full authorization model.
 
 ---
 

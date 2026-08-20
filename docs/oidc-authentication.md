@@ -31,6 +31,7 @@ Platform binds the following configuration sections at startup
 | `Dashboard:Oidc` | `PostLogoutRedirectPath` (default `/`) | `authentication.oidc.dashboard.postLogoutRedirectPath` |
 | `Authorization:TenantCreation` | `Mode` / `RequiredRole` / `RequiredClaimType` / `RequiredClaimValues` | `authentication.authorization.tenantCreation.*` |
 | `Authorization:PlatformAdministrator` | `Mode` / `RequiredRole` / `RequiredClaimType` / `RequiredClaimValues` | `authentication.authorization.platformAdministrator.*` |
+| `Authorization:Invitations` | `EmailClaimTypes` (default `email`, `emails`, `preferred_username`, and the legacy XML SOAP `emailaddress` claim) | `authentication.authorization.invitations.emailClaimTypes` |
 | `Platform` | `PublicBaseUrl` | `platform.publicBaseUrl` |
 | `Cors` | `AllowedOrigins` | `config.cors.allowedOrigins` |
 
@@ -86,6 +87,25 @@ provider:
 Set `platform.publicBaseUrl` once and reuse it — do not hardcode `localhost`
 or a ClusterIP hostname in Production.
 
+## Two separate authorization domains
+
+Platform deliberately keeps two authorization domains separate — do not
+conflate them:
+
+1. **Platform-level `TenantCreation`** — an OIDC role/claim check (below)
+   that decides who may call `POST /v1/tenants` and create a *new* tenant.
+2. **Tenant-level `Owner` / `Member`** — Platform-internal roles
+   (`TenantMembership.Owner`, `TenantMembership.Member`) stored per tenant.
+   They are **not** OIDC roles/claims and require no IdP configuration.
+   `Owner` is granted automatically to whoever creates a tenant; `Member` is
+   granted automatically via invitation JIT-claim (see
+   [`docs/tenant-invitations-and-roles.md`](tenant-invitations-and-roles.md)).
+
+Keeping `Owner`/`Member` Platform-owned (rather than OIDC roles) is
+intentional: it lets Platform introduce future fine-grained permissions
+(SLO management, alerts, API keys, tenant admin, etc.) purely as internal
+authorization logic, without requiring any new Helm/IdP configuration.
+
 ## Tenant-creation authorization
 
 `POST /v1/tenants` (self-service tenant bootstrap) is governed by
@@ -95,23 +115,43 @@ or a ClusterIP hostname in Production.
 authentication:
   authorization:
     tenantCreation:
-      mode: AnyAuthenticatedUser   # any authenticated OIDC user may create a tenant
-      # mode: Role
-      # requiredRole: plaxion-platform-admin
+      # AnyAuthenticatedUser | Role | Claim
+      # RECOMMENDED for production: Role, with a dedicated IdP role such as
+      # platform-tenant-admin, so tenant creation isn't open to every
+      # authenticated user.
+      mode: Role
+      requiredRole: platform-tenant-admin
+      # mode: AnyAuthenticatedUser  # any authenticated OIDC user may create a tenant
       # mode: Claim
       # requiredClaimType: plaxion:tenant-creator
       # requiredClaimValues: []    # empty = presence of the claim type alone is enough
 ```
 
 These claim/role checks are provider-neutral — the chart never encodes
-Keycloak-, Entra-, or Okta-specific claim shapes.
+Keycloak-, Entra-, or Okta-specific claim shapes. This setting controls only
+who may *create* tenants; it has no bearing on `Owner`/`Member` tenant
+membership (see above).
+
+## Multi-tenant invitations (Owner -> Member)
+
+Once a tenant exists, its `Owner`(s) invite other users via
+`POST /v1/invitations { email, tenantIds[] }` (Owner-only, one request may
+target multiple tenants atomically). No invitation email is sent and no
+manual acceptance step exists — see
+[`docs/tenant-invitations-and-roles.md`](tenant-invitations-and-roles.md) for
+the full flow and a curl example. Invitees need **no** special IdP
+role/claim to become a `Member` — they only need to authenticate with an
+email claim matching the invitation (`authentication.authorization.invitations.emailClaimTypes`
+controls which JWT claims are inspected).
 
 ## Existing-tenant upgrade / bootstrap
 
 See [`docs/upgrade-to-oidc.md`](upgrade-to-oidc.md) for the full pre-OIDC
 upgrade procedure, which relies on
 `authentication.authorization.platformAdministrator.*` and the explicit
-`POST /v1/tenants/{tenantId}/memberships` reconciliation endpoint.
+`POST /v1/tenants/{tenantId}/memberships` reconciliation endpoint. This is a
+legacy/break-glass mechanism only — normal onboarding after the upgrade uses
+Owner-issued invitations, not `PlatformAdministrator`.
 
 ## Ingress / IngressRoute / TLS
 
@@ -143,6 +183,9 @@ callers via `X-Api-Key` only.
 | Keycloak-issued token rejected | Missing/incorrect audience mapper, or `authority` doesn't match the realm issuer exactly (trailing slash matters) |
 | `Platform.Ingestion` returns `401` | Unrelated to OIDC — check the `X-Api-Key` used by the telemetry exporter, not user login |
 | Metrics never arrive in the Dashboard | Check Ingestion networking/API key, not authentication — the two are independent |
+| Browser console shows `GET https://api.plaxion.io/v1/platform/config net::ERR_NAME_NOT_RESOLVED` | Harmless build-time fallback: the Dashboard's compiled `environment.apiBaseUrl` (`https://api.plaxion.io`) is only a first-choice bootstrap attempt; on failure it falls back to `wwwroot/assets/config.json`, which this chart's entrypoint always writes from `platform.apiBaseUrl`/`API_BASE_URL`. This log line is not caused by, and cannot be silenced through, any Helm value — it does not indicate `authentication.*` or `platform.apiBaseUrl` are misconfigured. Verify the real config with `curl https://<publicBaseUrl>/v1/platform/config` (or `.../assets/config.json`) and check `authentication.enabled`/`authority`/`clientId` there instead. |
+| `401` specifically on `GET /v1/tenants` after a successful Keycloak login | The access token *is* being sent (see `auth.interceptor.ts`), so the API is rejecting it — recheck that the Keycloak client has an **audience mapper** producing `aud == authentication.oidc.audience`, and that `authentication.oidc.authority` is byte-for-byte identical (scheme, host, realm path, trailing slash) to the `iss` claim in the token (`jwt.io` can decode it). A reverse proxy in front of Keycloak that rewrites the issuer is a common cause. |
+| Keycloak "Audience" protocol mapper is present but `aud` still doesn't match `authentication.oidc.audience` | Keycloak's `oidc-audience-mapper` has two mutually exclusive config keys: `included.client.audience` (sets `aud` to *another client's Client ID*) and `included.custom.audience` (sets `aud` to an arbitrary string). Setting `included.client.audience: "plaxion-platform-ui"` (the SPA's own Client ID) makes the token's `aud` become `plaxion-platform-ui`, **not** whatever string you put in `authentication.oidc.audience`. Either set `authentication.oidc.audience` to that same Client ID, or change the mapper to `included.custom.audience` with the exact value configured in `authentication.oidc.audience`. Decode the token at `jwt.io` to see the real `aud` before changing either side. |
 
 ## Secret separation
 
