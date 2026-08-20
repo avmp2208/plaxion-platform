@@ -1,0 +1,101 @@
+# OIDC + Traefik IngressRoute example. Public Dashboard/API via one host,
+# optional independently-public OTLP hostname for Ingestion, external Postgres.
+# Placeholders only — do not commit real credentials.
+
+image:
+  registry: ghcr.io
+  repository: plaxion/plaxion-platform
+  tag: "0.2.0"
+
+aspnetcore:
+  environment: Production
+
+platform:
+  apiBaseUrl: ""
+  publicBaseUrl: "https://platform.example.com"
+  environment: Production
+
+authentication:
+  enabled: true
+  allowAnonymousProduction: false
+  oidc:
+    authority: "https://sso.example.com/realms/company"
+    audience: "plaxion-platform"
+    requireHttpsMetadata: true
+    dashboard:
+      clientId: "plaxion-platform-ui"
+      scopes:
+        - openid
+        - profile
+        - email
+      redirectPath: /auth/callback
+      postLogoutRedirectPath: /
+  authorization:
+    tenantCreation:
+      mode: AnyAuthenticatedUser
+    platformAdministrator:
+      mode: Disabled
+
+config:
+  cors:
+    allowedOrigins: []
+
+database:
+  provider: PostgreSql
+  mode: external
+  external:
+    host: postgres.databases.svc.cluster.local
+    port: 5432
+    database: plaxion
+    username: plaxion
+    existingSecret:
+      name: plaxion-platform-db-password
+      passwordKey: password
+
+postgresql:
+  enabled: false
+
+api:
+  enabled: true
+  replicaCount: 2
+  service:
+    type: ClusterIP
+  ingress:
+    enabled: false
+  ingressRoute:
+    enabled: true
+    entryPoints:
+      - websecure
+    routes:
+      - match: Host(`platform.example.com`)
+        kind: Rule
+        middlewares: []
+    tls:
+      secretName: platform-tls
+      # certResolver: letsencrypt
+
+## Ingestion is independently exposed here via its own hostname/IngressRoute —
+## this is optional; delete this block (or set enabled: false) to keep
+## Ingestion ClusterIP-only instead. Independent from the OIDC-secured web surface.
+ingestion:
+  enabled: true
+  replicaCount: 2
+  service:
+    type: ClusterIP
+  ingress:
+    enabled: false
+  ingressRoute:
+    enabled: true
+    entryPoints:
+      - websecure
+    routes:
+      - match: Host(`otlp.example.com`)
+        kind: Rule
+    tls:
+      secretName: otlp-tls
+
+migrations:
+  enabled: true
+
+ingressRoute:
+  annotations: {}

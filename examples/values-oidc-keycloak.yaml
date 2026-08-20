@@ -1,0 +1,42 @@
+# Keycloak used as the OIDC provider. This file demonstrates ONLY the
+# configuration differences needed to point Platform at an existing Keycloak
+# realm/client — it does NOT install Keycloak (bring your own).
+#
+# Prerequisite Keycloak client (created by you, outside this chart):
+#   - Client type: public (no client secret)
+#   - Standard flow (Authorization Code) enabled, PKCE required
+#   - Valid redirect URI:      https://platform.example.com/auth/callback
+#   - Valid post logout URI:   https://platform.example.com/
+#   - Client ID:               plaxion-platform-ui
+#   - Audience mapped via a Keycloak "audience" client scope/mapper so the
+#     issued access token's `aud` claim equals authentication.oidc.audience.
+#
+# See docs/oidc-keycloak.md for the full step-by-step tutorial.
+
+platform:
+  publicBaseUrl: "https://platform.example.com"
+
+authentication:
+  enabled: true
+  allowAnonymousProduction: false
+  oidc:
+    # Keycloak realm issuer URL: https://<keycloak-host>/realms/<realm>
+    authority: "https://keycloak.example.com/realms/plaxion"
+    # Must match the audience produced by your Keycloak audience mapper.
+    audience: "plaxion-platform"
+    requireHttpsMetadata: true
+    dashboard:
+      clientId: "plaxion-platform-ui"
+      scopes:
+        - openid
+        - profile
+        - email
+      redirectPath: /auth/callback
+      postLogoutRedirectPath: /
+  authorization:
+    tenantCreation:
+      # Example: require a Keycloak realm role instead of any authenticated user.
+      mode: Role
+      requiredRole: "plaxion-platform-admin"
+    platformAdministrator:
+      mode: Disabled

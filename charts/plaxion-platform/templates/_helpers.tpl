@@ -353,7 +353,7 @@ Common non-sensitive environment variables shared by api/ingestion/migration
 {{- end }}
 
 {{/*
-API-only env (CORS + API_BASE_URL for dashboard config.json)
+API-only env (CORS + API_BASE_URL for dashboard config.json + OIDC authentication/authorization)
 */}}
 {{- define "plaxion-platform.apiEnv" -}}
 - name: ROLE
@@ -363,6 +363,69 @@ API-only env (CORS + API_BASE_URL for dashboard config.json)
 {{- range $i, $origin := .Values.config.cors.allowedOrigins }}
 - name: {{ printf "Cors__AllowedOrigins__%d" $i | quote }}
   value: {{ $origin | quote }}
+{{- end }}
+{{- include "plaxion-platform.authenticationEnv" . }}
+{{- end }}
+
+{{/*
+OIDC authentication + tenant/platform-administrator authorization env (API only).
+Maps 1:1 to Platform's Authentication / Authorization:* / Dashboard:Oidc configuration contract.
+*/}}
+{{- define "plaxion-platform.authenticationEnv" -}}
+{{- $auth := .Values.authentication }}
+- name: Authentication__Enabled
+  value: {{ $auth.enabled | default false | toString | quote }}
+- name: Authentication__RequireHttpsMetadata
+  value: {{ $auth.oidc.requireHttpsMetadata | default true | toString | quote }}
+- name: Authentication__AllowAnonymousProduction
+  value: {{ $auth.allowAnonymousProduction | default false | toString | quote }}
+{{- if $auth.oidc.authority }}
+- name: Authentication__Authority
+  value: {{ $auth.oidc.authority | quote }}
+{{- end }}
+{{- if $auth.oidc.audience }}
+- name: Authentication__Audience
+  value: {{ $auth.oidc.audience | quote }}
+{{- end }}
+{{- if $auth.oidc.dashboard.clientId }}
+- name: Dashboard__Oidc__ClientId
+  value: {{ $auth.oidc.dashboard.clientId | quote }}
+{{- end }}
+{{- range $i, $scope := $auth.oidc.dashboard.scopes }}
+- name: {{ printf "Dashboard__Oidc__Scopes__%d" $i | quote }}
+  value: {{ $scope | quote }}
+{{- end }}
+- name: Dashboard__Oidc__RedirectPath
+  value: {{ $auth.oidc.dashboard.redirectPath | default "/auth/callback" | quote }}
+- name: Dashboard__Oidc__PostLogoutRedirectPath
+  value: {{ $auth.oidc.dashboard.postLogoutRedirectPath | default "/" | quote }}
+- name: Authorization__TenantCreation__Mode
+  value: {{ $auth.authorization.tenantCreation.mode | default "AnyAuthenticatedUser" | quote }}
+{{- if $auth.authorization.tenantCreation.requiredRole }}
+- name: Authorization__TenantCreation__RequiredRole
+  value: {{ $auth.authorization.tenantCreation.requiredRole | quote }}
+{{- end }}
+{{- if $auth.authorization.tenantCreation.requiredClaimType }}
+- name: Authorization__TenantCreation__RequiredClaimType
+  value: {{ $auth.authorization.tenantCreation.requiredClaimType | quote }}
+{{- end }}
+{{- range $i, $val := $auth.authorization.tenantCreation.requiredClaimValues }}
+- name: {{ printf "Authorization__TenantCreation__RequiredClaimValues__%d" $i | quote }}
+  value: {{ $val | quote }}
+{{- end }}
+- name: Authorization__PlatformAdministrator__Mode
+  value: {{ $auth.authorization.platformAdministrator.mode | default "Disabled" | quote }}
+{{- if $auth.authorization.platformAdministrator.requiredRole }}
+- name: Authorization__PlatformAdministrator__RequiredRole
+  value: {{ $auth.authorization.platformAdministrator.requiredRole | quote }}
+{{- end }}
+{{- if $auth.authorization.platformAdministrator.requiredClaimType }}
+- name: Authorization__PlatformAdministrator__RequiredClaimType
+  value: {{ $auth.authorization.platformAdministrator.requiredClaimType | quote }}
+{{- end }}
+{{- range $i, $val := $auth.authorization.platformAdministrator.requiredClaimValues }}
+- name: {{ printf "Authorization__PlatformAdministrator__RequiredClaimValues__%d" $i | quote }}
+  value: {{ $val | quote }}
 {{- end }}
 {{- end }}
 
@@ -479,5 +542,46 @@ Validate required database settings (fail fast on helm template/install)
   {{- end }}
 {{- else }}
   {{- fail "database.mode must be 'external' or 'bundled'" }}
+{{- end }}
+{{- $auth := .Values.authentication }}
+{{- $env := .Values.platform.environment | default .Values.aspnetcore.environment | default "Production" }}
+{{- if $auth.enabled }}
+  {{- if not $auth.oidc.authority }}
+  {{- fail "authentication.oidc.authority is required when authentication.enabled=true" }}
+  {{- end }}
+  {{- if not $auth.oidc.audience }}
+  {{- fail "authentication.oidc.audience is required when authentication.enabled=true" }}
+  {{- end }}
+  {{- if not $auth.oidc.dashboard.clientId }}
+  {{- fail "authentication.oidc.dashboard.clientId is required when authentication.enabled=true" }}
+  {{- end }}
+{{- else }}
+  {{- if and (eq $env "Production") (not $auth.allowAnonymousProduction) }}
+  {{- fail "authentication.enabled=false in a Production environment requires authentication.allowAnonymousProduction=true (Platform refuses to start anonymous in Production otherwise). This is intentionally unsafe-looking — do not set it for real production deployments; configure OIDC instead." }}
+  {{- end }}
+{{- end }}
+{{- $tcMode := $auth.authorization.tenantCreation.mode | default "AnyAuthenticatedUser" }}
+{{- if eq $tcMode "Role" }}
+  {{- if not $auth.authorization.tenantCreation.requiredRole }}
+  {{- fail "authentication.authorization.tenantCreation.requiredRole is required when mode=Role" }}
+  {{- end }}
+{{- else if eq $tcMode "Claim" }}
+  {{- if not $auth.authorization.tenantCreation.requiredClaimType }}
+  {{- fail "authentication.authorization.tenantCreation.requiredClaimType is required when mode=Claim" }}
+  {{- end }}
+{{- else if ne $tcMode "AnyAuthenticatedUser" }}
+  {{- fail (printf "authentication.authorization.tenantCreation.mode '%s' is not supported (use AnyAuthenticatedUser, Role, or Claim)" $tcMode) }}
+{{- end }}
+{{- $paMode := $auth.authorization.platformAdministrator.mode | default "Disabled" }}
+{{- if eq $paMode "Role" }}
+  {{- if not $auth.authorization.platformAdministrator.requiredRole }}
+  {{- fail "authentication.authorization.platformAdministrator.requiredRole is required when mode=Role" }}
+  {{- end }}
+{{- else if eq $paMode "Claim" }}
+  {{- if not $auth.authorization.platformAdministrator.requiredClaimType }}
+  {{- fail "authentication.authorization.platformAdministrator.requiredClaimType is required when mode=Claim" }}
+  {{- end }}
+{{- else if ne $paMode "Disabled" }}
+  {{- fail (printf "authentication.authorization.platformAdministrator.mode '%s' is not supported (use Disabled, Role, or Claim)" $paMode) }}
 {{- end }}
 {{- end }}

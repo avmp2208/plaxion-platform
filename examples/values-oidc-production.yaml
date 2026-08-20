@@ -1,0 +1,132 @@
+# OIDC-secured production example: external PostgreSQL via existing Secret,
+# generic OIDC authentication enabled, public Dashboard/API via standard
+# Kubernetes Ingress + existing TLS Secret, Ingestion kept internal-only.
+# Placeholders only — do not commit real credentials.
+
+image:
+  registry: ghcr.io
+  repository: plaxion/plaxion-platform
+  tag: "0.2.0"
+  pullPolicy: IfNotPresent
+
+imagePullSecrets:
+  - name: ghcr-pull-secret
+
+aspnetcore:
+  environment: Production
+
+platform:
+  apiBaseUrl: ""    # empty = same-origin: Dashboard and API share https://platform.example.com
+  publicBaseUrl: "https://platform.example.com"
+  environment: Production
+
+## Generic, provider-neutral OIDC. Works with Keycloak, IdentityServer/Duende,
+## Entra ID, Okta, etc. — the chart never installs an identity provider.
+## Register with your OIDC provider:
+##   redirect URI:            https://platform.example.com/auth/callback
+##   post-logout redirect URI: https://platform.example.com/
+authentication:
+  enabled: true
+  allowAnonymousProduction: false
+  oidc:
+    authority: "https://sso.example.com/realms/company"
+    audience: "plaxion-platform"
+    requireHttpsMetadata: true
+    dashboard:
+      clientId: "plaxion-platform-ui"
+      scopes:
+        - openid
+        - profile
+        - email
+      redirectPath: /auth/callback
+      postLogoutRedirectPath: /
+  authorization:
+    tenantCreation:
+      # AnyAuthenticatedUser | Role | Claim
+      mode: AnyAuthenticatedUser
+    # Disabled by default. Only enable temporarily while reconciling pre-OIDC
+    # legacy tenants (see docs/upgrade-to-oidc.md), then set back to Disabled.
+    platformAdministrator:
+      mode: Disabled
+
+# Same-origin Dashboard/API — no cross-origin CORS needed.
+config:
+  cors:
+    allowedOrigins: []
+
+database:
+  provider: PostgreSql
+  mode: external
+  external:
+    existingConnectionStringSecret:
+      name: plaxion-platform-db
+      key: connection-string
+    host: ""
+    database: ""
+    username: ""
+
+postgresql:
+  enabled: false
+
+api:
+  enabled: true
+  replicaCount: 2
+  service:
+    type: ClusterIP
+    port: 8080
+  ingress:
+    enabled: true
+    className: nginx
+    annotations:
+      nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    hosts:
+      - host: platform.example.com
+        paths:
+          - path: /
+            pathType: Prefix
+    tls:
+      - secretName: platform-tls
+        hosts:
+          - platform.example.com
+  ingressRoute:
+    enabled: false
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 8
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: "2"
+      memory: 1Gi
+
+## Ingestion stays independent from the OIDC/web topology: internal-only by
+## default. Human OIDC login never applies here — telemetry keeps using API keys.
+ingestion:
+  enabled: true
+  replicaCount: 2
+  service:
+    type: ClusterIP
+  ingress:
+    enabled: false
+  ingressRoute:
+    enabled: false
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: "2"
+      memory: 1Gi
+
+migrations:
+  enabled: true
+  backoffLimit: 5
+  ttlSecondsAfterFinished: 600
+
+networkPolicy:
+  enabled: true
+  allowExternal: true
+  restrictiveEgress: false

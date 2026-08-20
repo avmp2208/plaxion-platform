@@ -14,6 +14,18 @@ verification, all three exposure scenarios (internal-only, standard Ingress,
 Traefik `IngressRoute`), upgrade, rollback, uninstall, troubleshooting, and a
 production checklist.
 
+## 🔐 Authentication (OIDC)
+
+Dashboard and `Platform.Api` are secured by **generic, standards-based OIDC**
+(Authorization Code + PKCE) — the same identity provider you already run.
+This chart never installs an identity provider; `Platform.Ingestion` (OTLP)
+is unaffected and continues to use `X-Api-Key`.
+
+- [docs/oidc-authentication.md](docs/oidc-authentication.md) — the generic contract, values reference, same-origin/CORS, troubleshooting
+- [docs/oidc-keycloak.md](docs/oidc-keycloak.md) — Keycloak walkthrough
+- [docs/oidc-identityserver.md](docs/oidc-identityserver.md) — IdentityServer/Duende walkthrough
+- [docs/upgrade-to-oidc.md](docs/upgrade-to-oidc.md) — upgrading an existing pre-OIDC release without losing tenant access
+
 ## Chart
 
 See **[charts/plaxion-platform/README.md](charts/plaxion-platform/README.md)** for the condensed chart reference:
@@ -36,7 +48,13 @@ See [docs/installation.md](docs/installation.md#before-you-begin) for details an
 
 ## Chart compatibility
 
-Chart version `0.1.0` · App version `0.1.0` · Kubernetes 1.25+ · Helm 3.10+.
+Chart version `0.2.0` · App version `0.2.0` · Kubernetes 1.25+ · Helm 3.10+.
+
+> Chart `0.2.0` adds generic OIDC authentication (`authentication.*` values).
+> Existing pre-`0.2.0` releases keep working after upgrade only if you follow
+> [docs/upgrade-to-oidc.md](docs/upgrade-to-oidc.md) — Production installations
+> now require either `authentication.enabled: true` (recommended) or the
+> explicit, intentionally unsafe `authentication.allowAnonymousProduction: true`.
 
 ## Quick start
 
@@ -52,10 +70,14 @@ For a production-oriented walkthrough, follow [docs/installation.md](docs/instal
 
 | File | Description |
 |------|-------------|
-| [`examples/values-simple.yaml`](examples/values-simple.yaml) | Minimal external Postgres |
-| [`examples/values-production.yaml`](examples/values-production.yaml) | Production Ingress + TLS + HPA |
-| [`examples/values-traefik.yaml`](examples/values-traefik.yaml) | Traefik IngressRoute |
-| [`examples/values-internal.yaml`](examples/values-internal.yaml) | ClusterIP-only / internal |
+| [`examples/values-simple.yaml`](examples/values-simple.yaml) | Minimal external Postgres, anonymous (Development) |
+| [`examples/values-production.yaml`](examples/values-production.yaml) | Production Ingress + TLS + HPA + OIDC |
+| [`examples/values-traefik.yaml`](examples/values-traefik.yaml) | Traefik IngressRoute + OIDC |
+| [`examples/values-internal.yaml`](examples/values-internal.yaml) | ClusterIP-only / internal, explicit anonymous Production override |
+| [`examples/values-oidc-production.yaml`](examples/values-oidc-production.yaml) | OIDC + external Postgres Secret + Ingress + internal Ingestion |
+| [`examples/values-oidc-traefik.yaml`](examples/values-oidc-traefik.yaml) | OIDC + Traefik IngressRoute + optional public OTLP host |
+| [`examples/values-oidc-keycloak.yaml`](examples/values-oidc-keycloak.yaml) | Keycloak-specific OIDC values only |
+| [`examples/values-oidc-identityserver.yaml`](examples/values-oidc-identityserver.yaml) | IdentityServer/Duende-specific OIDC values only |
 
 ## CI
 

@@ -28,6 +28,103 @@
         "urls": { "type": "string" }
       }
     },
+    "authentication": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "allowAnonymousProduction": { "type": "boolean" },
+        "oidc": {
+          "type": "object",
+          "properties": {
+            "authority": { "type": "string" },
+            "audience": { "type": "string" },
+            "requireHttpsMetadata": { "type": "boolean" },
+            "dashboard": {
+              "type": "object",
+              "properties": {
+                "clientId": { "type": "string" },
+                "scopes": { "type": "array", "items": { "type": "string" } },
+                "redirectPath": { "type": "string" },
+                "postLogoutRedirectPath": { "type": "string" }
+              }
+            }
+          }
+        },
+        "authorization": {
+          "type": "object",
+          "properties": {
+            "tenantCreation": {
+              "type": "object",
+              "properties": {
+                "mode": {
+                  "type": "string",
+                  "enum": ["AnyAuthenticatedUser", "Role", "Claim"]
+                },
+                "requiredRole": { "type": "string" },
+                "requiredClaimType": { "type": "string" },
+                "requiredClaimValues": { "type": "array", "items": { "type": "string" } }
+              },
+              "allOf": [
+                {
+                  "if": { "properties": { "mode": { "const": "Role" } }, "required": ["mode"] },
+                  "then": { "required": ["requiredRole"], "properties": { "requiredRole": { "type": "string", "minLength": 1 } } }
+                },
+                {
+                  "if": { "properties": { "mode": { "const": "Claim" } }, "required": ["mode"] },
+                  "then": { "required": ["requiredClaimType"], "properties": { "requiredClaimType": { "type": "string", "minLength": 1 } } }
+                }
+              ]
+            },
+            "platformAdministrator": {
+              "type": "object",
+              "properties": {
+                "mode": {
+                  "type": "string",
+                  "enum": ["Disabled", "Role", "Claim"]
+                },
+                "requiredRole": { "type": "string" },
+                "requiredClaimType": { "type": "string" },
+                "requiredClaimValues": { "type": "array", "items": { "type": "string" } }
+              },
+              "allOf": [
+                {
+                  "if": { "properties": { "mode": { "const": "Role" } }, "required": ["mode"] },
+                  "then": { "required": ["requiredRole"], "properties": { "requiredRole": { "type": "string", "minLength": 1 } } }
+                },
+                {
+                  "if": { "properties": { "mode": { "const": "Claim" } }, "required": ["mode"] },
+                  "then": { "required": ["requiredClaimType"], "properties": { "requiredClaimType": { "type": "string", "minLength": 1 } } }
+                }
+              ]
+            }
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "enabled": { "const": true } }, "required": ["enabled"] },
+          "then": {
+            "properties": {
+              "oidc": {
+                "type": "object",
+                "required": ["authority", "audience"],
+                "properties": {
+                  "authority": { "type": "string", "minLength": 1 },
+                  "audience": { "type": "string", "minLength": 1 },
+                  "dashboard": {
+                    "type": "object",
+                    "required": ["clientId"],
+                    "properties": {
+                      "clientId": { "type": "string", "minLength": 1 }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
     "api": {
       "type": "object",
       "properties": {

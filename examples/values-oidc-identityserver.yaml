@@ -1,0 +1,43 @@
+# IdentityServer / Duende used as the OIDC provider. Demonstrates that the
+# Helm values differ ONLY in normal OIDC configuration — the chart is
+# provider-neutral and does not install IdentityServer.
+#
+# Prerequisite IdentityServer client (created by you, outside this chart):
+#   - Client type: public SPA (no client secret)
+#   - AllowedGrantTypes: Authorization Code, RequirePkce: true
+#   - RedirectUris:            https://platform.example.com/auth/callback
+#   - PostLogoutRedirectUris:  https://platform.example.com/
+#   - ClientId:                plaxion-platform-ui
+#   - ApiResources / ApiScopes configured so issued tokens carry
+#     aud == authentication.oidc.audience below.
+#
+# See docs/oidc-identityserver.md for the full step-by-step tutorial.
+
+platform:
+  publicBaseUrl: "https://platform.example.com"
+
+authentication:
+  enabled: true
+  allowAnonymousProduction: false
+  oidc:
+    # IdentityServer/Duende authority (issuer) base URL.
+    authority: "https://idp.example.com"
+    # Must match an ApiResource/ApiScope audience configured in IdentityServer.
+    audience: "plaxion-platform"
+    requireHttpsMetadata: true
+    dashboard:
+      clientId: "plaxion-platform-ui"
+      scopes:
+        - openid
+        - profile
+        - email
+      redirectPath: /auth/callback
+      postLogoutRedirectPath: /
+  authorization:
+    tenantCreation:
+      # Example: require a generic claim instead of a role.
+      mode: Claim
+      requiredClaimType: "plaxion:tenant-creator"
+      requiredClaimValues: []
+    platformAdministrator:
+      mode: Disabled

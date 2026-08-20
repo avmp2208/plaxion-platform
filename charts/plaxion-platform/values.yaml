@@ -33,6 +33,83 @@ platform:
   publicBaseUrl: ""
   environment: "" # optional Platform__Environment override; defaults to aspnetcore.environment
 
+## OIDC authentication + tenant/platform-administrator authorization.
+## Mirrors Platform's actual "Authentication" / "Authorization:*" / "Dashboard:Oidc"
+## configuration contract 1:1 (see Platform.Hosting.Configuration.PlatformOptions).
+## Ingestion (OTLP) is NOT affected by this section — it always uses API keys (see below).
+authentication:
+  # When true, Platform.Api validates JWT Bearer tokens against oidc.authority/oidc.audience
+  # and the Dashboard SPA performs an OIDC Authorization Code + PKCE login.
+  # Platform itself refuses to start in Production with enabled=false unless
+  # allowAnonymousProduction is also true — keep this in sync with aspnetcore.environment.
+  enabled: false
+
+  # Explicit, intentionally unsafe-looking escape hatch. Mirrors
+  # Authentication:AllowAnonymousProduction. Only set true for throwaway/dev clusters
+  # that use aspnetcore.environment=Production without an OIDC provider.
+  # NEVER enable this for a real production deployment.
+  allowAnonymousProduction: false
+
+  oidc:
+    # OIDC issuer/authority, e.g. https://sso.example.com/realms/company
+    # Maps to Authentication:Authority. Required when authentication.enabled=true.
+    authority: ""
+    # Expected JWT audience (API resource identifier). Maps to Authentication:Audience.
+    # Required when authentication.enabled=true.
+    audience: ""
+    # Require HTTPS for OIDC discovery/JWKS metadata. Maps to Authentication:RequireHttpsMetadata.
+    # Only set false for local/dev IdP testing over plain HTTP.
+    requireHttpsMetadata: true
+
+    ## Public (non-secret) Angular Dashboard SPA OIDC client settings.
+    ## Authorization Code + PKCE — the browser client MUST NOT have a client secret.
+    ## Maps to Dashboard:Oidc:*; surfaced to the browser via GET /v1/platform/config.
+    dashboard:
+      # Public OIDC client_id registered at the identity provider for the SPA.
+      # Maps to Dashboard:Oidc:ClientId. Required when authentication.enabled=true.
+      clientId: ""
+      # Maps to Dashboard:Oidc:Scopes.
+      scopes:
+        - openid
+        - profile
+        - email
+      # In-app path for the OIDC redirect callback. Maps to Dashboard:Oidc:RedirectPath.
+      # Must be registered with the OIDC provider as:
+      #   <platform.publicBaseUrl>/auth/callback
+      redirectPath: /auth/callback
+      # In-app path after end-session/logout. Maps to Dashboard:Oidc:PostLogoutRedirectPath.
+      # Must be registered with the OIDC provider as the post-logout redirect URI:
+      #   <platform.publicBaseUrl>/
+      postLogoutRedirectPath: /
+
+  authorization:
+    ## Who may call POST /v1/tenants (self-service tenant creation) when
+    ## authentication.enabled=true. Maps to Authorization:TenantCreation:*.
+    tenantCreation:
+      # AnyAuthenticatedUser | Role | Claim
+      mode: AnyAuthenticatedUser
+      # Required when mode=Role.
+      requiredRole: ""
+      # Required when mode=Claim.
+      requiredClaimType: ""
+      # Optional allow-list of values for requiredClaimType (mode=Claim).
+      # Empty list = presence of the claim type alone is sufficient.
+      requiredClaimValues: []
+
+    ## Break-glass operators who may administer ANY tenant (including pre-OIDC
+    ## legacy tenants with zero membership rows) and call the explicit membership
+    ## reconciliation endpoint (POST /v1/tenants/{tenantId}/memberships).
+    ## Maps to Authorization:PlatformAdministrator:*.
+    ## CRITICAL for upgrading pre-OIDC installations — see docs/upgrade-to-oidc.md.
+    ## Keep Mode=Disabled until an upgrade run needs bootstrap access, then set
+    ## Role/Claim against a tightly scoped IdP group and revoke afterwards.
+    platformAdministrator:
+      # Disabled | Role | Claim
+      mode: Disabled
+      requiredRole: ""
+      requiredClaimType: ""
+      requiredClaimValues: []
+
 ## Non-sensitive application configuration (rendered as env vars)
 config:
   allowedHosts: "*"

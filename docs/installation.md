@@ -58,6 +58,11 @@ You need:
   (e.g. NGINX Ingress Controller) **or** Traefik with its CRDs already
   installed. Neither is installed by this chart — you must install one
   yourself if you need it.
+- An existing OIDC provider/client for human sign-in (Keycloak, IdentityServer,
+  Entra ID, Okta, etc. — **not installed by this chart**), unless you are
+  intentionally running an anonymous evaluation deployment. See
+  ["Before installing: prepare your OIDC provider"](#before-installing-prepare-your-oidc-provider)
+  below and [docs/oidc-authentication.md](oidc-authentication.md).
 
 Verify your tooling before continuing:
 
@@ -84,6 +89,26 @@ kubectl get crd ingressroutes.traefik.io
 ```
 
 ---
+
+## Before installing: prepare your OIDC provider
+
+Dashboard/`Platform.Api` sign-in uses generic, standards-based OIDC
+(Authorization Code + PKCE). Before installing a real (non-anonymous)
+deployment, prepare an existing OIDC client with:
+
+- Authorization Code flow enabled, **PKCE required**
+- **No client secret** — the Angular Dashboard is a public browser client
+- Redirect URI: `https://<PLATFORM_HOST>/auth/callback`
+- Logout redirect URI (if used): `https://<PLATFORM_HOST>/`
+- Scopes: `openid`, `profile`, `email` (defaults; adjust if your provider needs more)
+- An audience/resource configured so issued access tokens carry the `aud`
+  value you will set in `authentication.oidc.audience`
+
+See provider-specific tutorials: [Keycloak](oidc-keycloak.md) ·
+[IdentityServer/Duende](oidc-identityserver.md) · full contract:
+[docs/oidc-authentication.md](oidc-authentication.md). Upgrading an existing
+pre-OIDC release? Use [docs/upgrade-to-oidc.md](upgrade-to-oidc.md) instead of
+this tutorial's plain install flow.
 
 ## What this chart installs
 
@@ -291,7 +316,26 @@ aspnetcore:
 
 platform:
   apiBaseUrl: ""                          # SAFE DEFAULT — empty means "same origin" (Dashboard calls API on the same host)
-  publicBaseUrl: "https://<PLATFORM_HOST>"  # OPTIONAL — public URL shown/used by the app, if applicable
+  publicBaseUrl: "https://<PLATFORM_HOST>"  # REQUIRED TO CHANGE — drives OIDC redirect/post-logout URIs
+
+# OIDC authentication. Production installs require enabled=true (recommended)
+# or the explicit, intentionally unsafe allowAnonymousProduction escape hatch.
+# See docs/oidc-authentication.md for the full contract and provider tutorials.
+authentication:
+  enabled: true                           # REQUIRED TO CHANGE for anonymous/dev-only deployments
+  allowAnonymousProduction: false         # SAFE DEFAULT — never set true for a real production deployment
+  oidc:
+    authority: "https://sso.example.com/realms/company"  # REQUIRED TO CHANGE
+    audience: "plaxion-platform"                          # REQUIRED TO CHANGE
+    requireHttpsMetadata: true                            # SAFE DEFAULT
+    dashboard:
+      clientId: "plaxion-platform-ui"                     # REQUIRED TO CHANGE
+      scopes: [openid, profile, email]                    # SAFE DEFAULT
+      redirectPath: /auth/callback                        # SAFE DEFAULT — register with your OIDC provider
+      postLogoutRedirectPath: /                            # SAFE DEFAULT — register with your OIDC provider
+  authorization:
+    tenantCreation:
+      mode: AnyAuthenticatedUser                          # OPTIONAL — or Role / Claim
 
 config:
   cors:
@@ -485,8 +529,10 @@ C](#scenario-c--traefik-ingressroute)).
 
 Once the Dashboard loads:
 
-1. Open the Dashboard.
-2. Create a tenant.
+1. Open the Dashboard. If `authentication.enabled=true` you are redirected to
+   your OIDC provider's login page — authenticate there first.
+2. Create a tenant (subject to your `authentication.authorization.tenantCreation`
+   policy).
 3. Copy the one-time API key shown after tenant creation — it is not shown
    again. This key is what your instrumented applications will use to send
    telemetry (see next section).

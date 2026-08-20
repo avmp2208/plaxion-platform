@@ -11,6 +11,17 @@ aspnetcore:
 
 platform:
   apiBaseUrl: ""
+  publicBaseUrl: "https://platform.example.com"
+
+# See examples/values-oidc-traefik.yaml for a fuller OIDC + Traefik example.
+authentication:
+  enabled: true
+  allowAnonymousProduction: false
+  oidc:
+    authority: "https://sso.example.com/realms/company"
+    audience: "plaxion-platform"
+    dashboard:
+      clientId: "plaxion-platform-ui"
 
 database:
   provider: PostgreSql

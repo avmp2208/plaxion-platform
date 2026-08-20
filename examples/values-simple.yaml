@@ -9,11 +9,18 @@ image:
   tag: "0.1.0"
   pullPolicy: IfNotPresent
 
+# Development here so the chart's Production-safe default (OIDC required, or
+# explicit authentication.allowAnonymousProduction) does not apply. This file
+# demonstrates anonymous/no-OIDC evaluation use only — never use Development
+# for a real deployment.
 aspnetcore:
-  environment: Production
+  environment: Development
 
 platform:
   apiBaseUrl: ""
+
+authentication:
+  enabled: false
 
 database:
   provider: PostgreSql

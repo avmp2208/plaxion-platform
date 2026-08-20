@@ -19,6 +19,32 @@ platform:
   publicBaseUrl: "https://platform.example.com"
   environment: Production
 
+# OIDC is required in Production (Platform refuses to start anonymous in Production
+# unless authentication.allowAnonymousProduction is explicitly and unsafely set).
+# Replace authority/clientId with your actual OIDC provider/client.
+# Register redirect URI:            https://platform.example.com/auth/callback
+# Register post-logout redirect:    https://platform.example.com/
+authentication:
+  enabled: true
+  allowAnonymousProduction: false
+  oidc:
+    authority: "https://sso.example.com/realms/company"
+    audience: "plaxion-platform"
+    requireHttpsMetadata: true
+    dashboard:
+      clientId: "plaxion-platform-ui"
+      scopes:
+        - openid
+        - profile
+        - email
+      redirectPath: /auth/callback
+      postLogoutRedirectPath: /
+  authorization:
+    tenantCreation:
+      mode: AnyAuthenticatedUser
+    platformAdministrator:
+      mode: Disabled
+
 config:
   cors:
     allowedOrigins:

@@ -15,6 +15,16 @@ platform:
   apiBaseUrl: ""
   publicBaseUrl: ""
 
+# EXPLICIT ANONYMOUS PRODUCTION OVERRIDE — intentionally unsafe-looking.
+# This example is fully internal (no Ingress/IngressRoute, no browser access
+# from outside the cluster) so anonymous access is scoped to trusted
+# in-cluster/VPN callers only. NEVER set allowAnonymousProduction: true for a
+# deployment that is reachable by untrusted users — configure authentication.oidc
+# instead (see examples/values-oidc-production.yaml).
+authentication:
+  enabled: false
+  allowAnonymousProduction: true
+
 database:
   provider: PostgreSql
   mode: external
