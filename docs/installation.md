@@ -50,7 +50,7 @@ You need:
 - `kubectl` configured to talk to that cluster.
 - `helm` (3.10+) installed locally.
 - Pull access to the Platform container image
-  (`ghcr.io/plaxion/plaxion-platform`, or your own mirror).
+  (`ghcr.io/avmp2208/plaxion-platform`, or your own mirror).
 - A reachable PostgreSQL 14+ database — **or** you plan to use the chart's
   bundled PostgreSQL (development/evaluation only, see
   [Optional bundled PostgreSQL](#optional-bundled-postgresql)).
@@ -172,7 +172,7 @@ All examples below assume this namespace. If you use a different name, replace
 
 ## Prepare image pull credentials (GHCR)
 
-If the Platform image (`ghcr.io/plaxion/plaxion-platform`) is **public**, you
+If the Platform image (`ghcr.io/avmp2208/plaxion-platform`) is **public**, you
 can skip this section entirely — leave `imagePullSecrets: []` in your values.
 
 If the image is private, create a dedicated Kubernetes `Secret` of type
@@ -304,8 +304,8 @@ Below is an annotated minimum you actually need to touch. Fields are marked:
 ```yaml
 image:
   registry: ghcr.io                       # SAFE DEFAULT
-  repository: plaxion/plaxion-platform    # REQUIRED TO CHANGE if you mirror the image
-  tag: "0.1.0"                            # REQUIRED TO CHANGE — pin an explicit version in production
+  repository: avmp2208/plaxion-platform   # REQUIRED TO CHANGE if you mirror the image
+  tag: "0.3.0"                            # REQUIRED TO CHANGE — pin an explicit version in production
   pullPolicy: IfNotPresent                # SAFE DEFAULT
 
 imagePullSecrets:                         # OPTIONAL — omit if image is public

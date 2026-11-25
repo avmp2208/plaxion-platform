@@ -31,6 +31,10 @@ jobs:
           - examples/values-production.yaml
           - examples/values-traefik.yaml
           - examples/values-internal.yaml
+          - examples/values-oidc-production.yaml
+          - examples/values-oidc-traefik.yaml
+          - examples/values-oidc-keycloak.yaml
+          - examples/values-oidc-identityserver.yaml
 
     steps:
       - name: Checkout

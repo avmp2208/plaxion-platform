@@ -1,6 +1,6 @@
 # plaxion-platform
 
-Official **Helm chart** repository for [PlaxionMediator.Platform](https://github.com/plaxion/PlaxionMediator.Platform).
+Official **Helm chart** repository for [PlaxionMediator.Platform](https://github.com/avmp2208/PlaxionMediator.Platform).
 
 This repo packages the Platform runtime (API + Ingestion + embedded Angular dashboard + EF migrations) for Kubernetes. Application source code lives in the Platform repository; deployable Kubernetes manifests and values live here.
 
@@ -41,7 +41,7 @@ See **[charts/plaxion-platform/README.md](charts/plaxion-platform/README.md)** f
 
 - Kubernetes 1.25+ cluster with `kubectl` configured
 - Helm 3.10+
-- Access to the `ghcr.io/plaxion/plaxion-platform` container image
+- Access to the `ghcr.io/avmp2208/plaxion-platform` container image
 - A PostgreSQL 14+ instance (external, recommended) or bundled PostgreSQL for evaluation
 - An Ingress controller or Traefik CRDs only if exposing HTTP externally
 

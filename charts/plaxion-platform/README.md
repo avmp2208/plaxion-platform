@@ -10,7 +10,7 @@ Official Helm chart for **PlaxionMediator.Platform** — a single container imag
 
 There is **no separate dashboard Deployment**. The dashboard is built into the image and served by the API process.
 
-Chart version: `0.1.0` · App version: `0.1.0`
+Chart version: `0.3.0` · App version: `0.3.0`
 
 ---
 
@@ -72,8 +72,8 @@ Example values files:
 ```yaml
 image:
   registry: ghcr.io
-  repository: plaxion/plaxion-platform   # required
-  tag: "0.1.0"                          # defaults to Chart.AppVersion when empty
+  repository: avmp2208/plaxion-platform  # required
+  tag: "0.3.0"                          # defaults to Chart.AppVersion when empty
   pullPolicy: IfNotPresent
 
 imagePullSecrets:
@@ -483,5 +483,6 @@ GitHub Actions workflow: [`.github/workflows/helm-ci.yml`](../../.github/workflo
 
 ## License / source
 
-Platform application source: PlaxionMediator.Platform.  
+This chart (templates, values, docs) is MIT licensed — see [`LICENSE`](../../LICENSE).
+Platform application source: PlaxionMediator.Platform.
 This repository publishes the official Helm packaging only.

@@ -4,8 +4,8 @@
 
 image:
   registry: ghcr.io
-  repository: plaxion/plaxion-platform
-  tag: "0.1.0"
+  repository: avmp2208/plaxion-platform
+  tag: "0.3.0"
   pullPolicy: IfNotPresent
 
 imagePullSecrets:

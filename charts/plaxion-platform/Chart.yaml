@@ -4,7 +4,7 @@ description: Official Helm chart for PlaxionMediator.Platform (API, Ingestion, D
 type: application
 version: 0.3.0
 appVersion: "0.3.0"
-home: https://github.com/plaxion/plaxion-platform
+home: https://github.com/avmp2208/plaxion-platform
 keywords:
   - plaxion
   - observability
@@ -13,7 +13,7 @@ keywords:
 maintainers:
   - name: Plaxion
 sources:
-  - https://github.com/plaxion/plaxion-platform
+  - https://github.com/avmp2208/plaxion-platform
 dependencies:
   - name: postgresql
     version: "~15.5.0"
